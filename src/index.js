@@ -7,6 +7,7 @@ const {
     loginUserValidation,
     handleValidationErrors,
 } = require("./validation/validation");
+const adminRoute = require("./controller/routes/adminRoutes")
 
 const api = express();
 
@@ -24,6 +25,11 @@ api.post("/login", loginUserValidation,handleValidationErrors, loginUser);
 // user
 
 api.get("/getUser", getAllUser);
+
+
+// admin
+
+api.use("/admin", adminRoute);
 
 
 module.exports = api;

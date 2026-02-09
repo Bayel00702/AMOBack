@@ -7,12 +7,32 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  PENDING
+  BANNED
+}
+
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
+  id           Int           @id @default(autoincrement())
+  email        String        @unique
   name         String
-  image        String?
+  phone        String
   passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  image        String?
+
+  role         Role          @default(BUYER)
+  status       AccountStatus @default(ACTIVE)
+
+  // только для продавца
+  shopName     String?
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }

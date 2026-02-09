@@ -5,10 +5,12 @@ const jwt = require("jsonwebtoken");
 
 const registerUser = async (req, res) => {
     try {
-        const { email, password, name, image } = req.body;
+        const { email, password, name, phone, image, role, shopName } = req.body;
 
-        if (!email || !password || !name) {
-            return res.status(400).json({ message: "email, password, name обязательны" });
+        const safeRole = role === "SELLER" ? "SELLER" : "BUYER";
+
+        if (role === "ADMIN") {
+            return res.status(403).json({ message: "Нельзя регистрировать ADMIN" });
         }
 
         const exists = await prisma.user.findUnique({ where: { email } });
@@ -16,24 +18,45 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ message: "Такой аккаунт уже существует" });
         }
 
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash(password, salt);
+        if (safeRole === "SELLER" && !shopName) {
+            return res.status(400).json({ message: "Для продавца нужен shopName" });
+        }
 
-        const userCreate = await prisma.user.create({
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const user = await prisma.user.create({
             data: {
                 email,
                 name,
+                phone,
                 image: image || null,
-                passwordHash: hash,
+                passwordHash,
+                role: safeRole,
+
+                status: safeRole === "SELLER" ? "PENDING" : "ACTIVE",
+
+                shopName: safeRole === "SELLER" ? shopName : null,
             },
-            select: { id: true, email: true, name: true, image: true, createdAt: true },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                phone: true,
+                image: true,
+                role: true,
+                status: true,
+                shopName: true,
+                createdAt: true,
+            },
         });
 
-        const token = jwt.sign({ id: userCreate.id }, process.env.JWT_SECRET, {
-            expiresIn: "30d",
-        });
+        const token = jwt.sign(
+            { id: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "30d" }
+        );
 
-        return res.json({ user: userCreate, token });
+        return res.json({ user, token });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ message: "Не удалось зарегистрироваться" });
@@ -44,39 +67,36 @@ const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await prisma.user.findUnique({
-            where: { email },
-        });
-
-        if (!user) {
-            return res.status(400).json({
-                message: "Неверный email или пароль",
-            });
+        const userFull = await prisma.user.findUnique({ where: { email } });
+        if (!userFull) {
+            return res.status(400).json({ message: "Неверный email или пароль" });
         }
 
-        const isValid = await bcrypt.compare(password, user.passwordHash);
+        if (userFull.status === "BANNED") {
+            return res.status(403).json({ message: "Аккаунт заблокирован" });
+        }
+
+        if (userFull.role === "SELLER" && userFull.status === "PENDING") {
+            return res.status(403).json({ message: "Продавец ещё не подтверждён" });
+        }
+
+        const isValid = await bcrypt.compare(password, userFull.passwordHash);
         if (!isValid) {
-            return res.status(400).json({
-                message: "Неверный email или пароль",
-            });
+            return res.status(400).json({ message: "Неверный email или пароль" });
         }
+
         const token = jwt.sign(
-            { id: user.id },
+            { id: userFull.id, role: userFull.role },
             process.env.JWT_SECRET,
             { expiresIn: "30d" }
         );
+        const { passwordHash, ...user } = userFull;
 
-        const { passwordHash, ...userData } = user;
-
-        return res.json({
-            user: userData,
-            token,
-        });
+        return res.json({ user, token });
     } catch (err) {
         console.error(err);
-        return res.status(500).json({
-            message: "Не удалось войти в аккаунт",
-        });
+        return res.status(500).json({ message: "Не удалось войти" });
     }
 };
+
 module.exports = { registerUser, loginUser };
