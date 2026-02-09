@@ -4,5 +4,11 @@ const api = require("./index");
 const PORT = process.env.PORT || 5000;
 
 api.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    const baseUrl = `http://localhost:${PORT}`;
+
+    console.log(`
+🚀 Server started successfully!
+
+🔗 Base URL: ${baseUrl}
+  `);
 });
