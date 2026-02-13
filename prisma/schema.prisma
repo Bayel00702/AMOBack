@@ -20,19 +20,35 @@ enum AccountStatus {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  email        String        @unique
+  id           Int     @id @default(autoincrement())
+  email        String  @unique
   name         String
   phone        String
   passwordHash String
   image        String?
 
-  role         Role          @default(BUYER)
-  status       AccountStatus @default(ACTIVE)
+  role   Role          @default(BUYER)
+  status AccountStatus @default(ACTIVE)
 
   // только для продавца
-  shopName     String?
+  shopName String?
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  //  обратная связь (нужно Prisma)
+  sessions Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  userId      Int
+  refreshHash String
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
