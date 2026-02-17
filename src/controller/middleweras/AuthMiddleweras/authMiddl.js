@@ -1,18 +1,19 @@
-import jwt from "jsonwebtoken";
+const jwt  = require("jsonwebtoken");
 
-export const authMiddleware = (req, res, next) => {
+const authMiddleware = (req, res, next) => {
     const header = req.headers.authorization;
 
     if (!header || !header.startsWith("Bearer ")) {
         return res.status(401).json({ message: "Unauthorized: no token" });
     }
 
+    if (user.status === "BANNED") return res.status(403).json({ message: "Аккаунт заблокирован" });
+
     const token = header.slice("Bearer ".length).trim();
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Под твой loginUser: jwt.sign({ id, role }, ...)
         req.user = { id: decoded.id, role: decoded.role };
         req.userId = decoded.id; // удобно для старых контроллеров
 
@@ -21,3 +22,4 @@ export const authMiddleware = (req, res, next) => {
         return res.status(401).json({ message: "Unauthorized: invalid/expired token" });
     }
 };
+ module.exports = {authMiddleware}

@@ -1,6 +1,9 @@
 const prisma = require("../../prisma");
 const { signAccessToken } = require("../../utils/tokens");
 const { hashToken, generateRefreshToken } = require("../../utils/refresh");
+const { getClientIp, getUserAgent, getDeviceName } = require("../../utils/device");
+const { enforceSessionLimit } = require("../../services/sessionLimit");
+
 
 const refresh = async (req, res) => {
     try {
@@ -35,9 +38,22 @@ const refresh = async (req, res) => {
         const newHash = hashToken(newRefresh);
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+        const ip = getClientIp(req);
+        const userAgent = getUserAgent(req);
+        const deviceName = getDeviceName(req);
+
         await prisma.session.create({
-            data: { userId: session.user.id, refreshHash: newHash, expiresAt },
+            data: {
+                userId: session.user.id,
+                refreshHash: newHash,
+                expiresAt,
+                ip,
+                userAgent,
+                deviceName,
+            },
         });
+
+        await enforceSessionLimit(session.user.id, 5);
 
         res.cookie("refreshToken", newRefresh, {
             httpOnly: true,
@@ -47,7 +63,13 @@ const refresh = async (req, res) => {
             path: "/auth",
         });
 
+
         const accessToken = signAccessToken({ id: session.user.id, role: session.user.role });
+
+        if (session.user.status === "BANNED") {
+            return res.status(403).json({ message: "Аккаунт заблокирован" });
+        }
+
         return res.json({ token: accessToken });
     } catch (e) {
         return res.status(401).json({ message: "Refresh failed" });

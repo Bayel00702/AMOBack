@@ -3,6 +3,10 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const {generateRefreshToken, hashToken} = require("../../utils/refresh");
 const { signAccessToken } = require("../../utils/tokens");
+const { getClientIp, getUserAgent, getDeviceName } = require("../../utils/device");
+const { enforceSessionLimit } = require("../../services/sessionLimit");
+
+
 
 
 const registerUser = async (req, res) => {
@@ -83,30 +87,37 @@ const loginUser = async (req, res) => {
         const isValid = await bcrypt.compare(password, userFull.passwordHash);
         if (!isValid) return res.status(400).json({ message: "Неверный email или пароль" });
 
-        // ✅ access token короткий
         const accessToken = signAccessToken({ id: userFull.id, role: userFull.role });
 
-        // ✅ refresh token длинный + хранение хэша в БД
         const refreshToken = generateRefreshToken();
         const refreshHash = hashToken(refreshToken);
 
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 дней
+        const refreshDays = userFull.role === "ADMIN" ? 7 : 30;
+        const expiresAt = new Date(Date.now() + refreshDays * 24 * 60 * 60 * 1000);
+
+        const ip = getClientIp(req);
+        const userAgent = getUserAgent(req);
+        const deviceName = getDeviceName(req);
 
         await prisma.session.create({
             data: {
                 userId: userFull.id,
                 refreshHash,
                 expiresAt,
+                ip,
+                userAgent,
+                deviceName,
             },
         });
 
-        // ✅ refresh в httpOnly cookie
+        await enforceSessionLimit(userFull.id, 5);
+
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
-            secure: true,      // в dev можно false, но в prod должно быть true
+            secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
             expires: expiresAt,
-            path: "/auth",     // cookie будет отправляться только на /auth/*
+            path: "/auth",
         });
 
         const { passwordHash, ...user } = userFull;
@@ -131,4 +142,22 @@ const logOut = async (req, res) => {
     res.json({ ok: true });
 };
 
-module.exports = { registerUser, loginUser, logOut };
+const logoutAll = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        await prisma.session.updateMany({
+            where: { userId, revokedAt: null },
+            data: { revokedAt: new Date() },
+        });
+
+        res.clearCookie("refreshToken", { path: "/auth" });
+
+        return res.json({ ok: true, message: "Вы вышли со всех устройств" });
+    } catch (e) {
+        return res.status(500).json({ message: "Не удалось выйти со всех устройств" });
+    }
+};
+
+
+module.exports = { registerUser, loginUser, logOut, logoutAll };
