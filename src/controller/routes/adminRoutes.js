@@ -6,7 +6,14 @@ const { getPendingSellers, approveSeller, rejectSeller } = require("../admin/sel
 
 const auth = require("../middleweras/auth");
 const requireRole = require("../middleweras/reqRole");
-const cors = require("cors");
+const {
+    createCategory,
+    getCategoriesAdmin,
+    updateCategory,
+    deleteCategory,
+} = require("../admin/admin.categories");
+
+
 
 //  всё ниже — только ADMIN
 router.use(auth);
@@ -25,5 +32,13 @@ router.get("/users", getUsers);
 router.get("/sellers/pending", getPendingSellers);
 router.patch("/sellers/:id/approve", approveSeller);
 router.patch("/sellers/:id/reject", rejectSeller);
+
+router.post("/categories", createCategory);
+router.get("/categories", getCategoriesAdmin);
+router.patch("/categories/:id", updateCategory);
+router.delete("/categories/:id", deleteCategory);
+
+
+
 
 module.exports = router;

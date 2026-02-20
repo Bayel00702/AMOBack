@@ -19,21 +19,32 @@ enum AccountStatus {
   BANNED
 }
 
+enum ProductStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           Int     @id @default(autoincrement())
   email        String  @unique
   name         String
-  phone        String
+  phone        String? @unique
   passwordHash String
   image        String?
 
-  role   Role          @default(BUYER)
-  status AccountStatus @default(ACTIVE)
+  role      Role          @default(BUYER)
+  status    AccountStatus @default(ACTIVE)
+  isTrusted Boolean       @default(false)
 
+  cart     Cart?
   shopName String?
 
-  sessions  Session[]
-  adminLogs AdminActionLog[] @relation("AdminLogsActor")
+  sessions          Session[]
+  adminLogs         AdminActionLog[]       @relation("AdminLogsActor")
+  products          Product[]              @relation("SellerProducts")
+  moderatedProducts ProductModerationLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -70,4 +81,84 @@ model AdminActionLog {
   @@index([actorId])
   @@index([targetId])
   @@index([createdAt])
+}
+
+model Category {
+  id       Int     @id @default(autoincrement())
+  name     String  @unique
+  slug     String  @unique
+  isActive Boolean @default(true)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id Int @id @default(autoincrement())
+
+  title         String
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  discountPrice Decimal? @db.Decimal(10, 2)
+
+  stock        Int           @default(0)
+  images       String[]
+  isActive     Boolean       @default(true)
+  status       ProductStatus @default(PENDING)
+  rejectReason String?
+
+  // связи
+  category       Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categoryId     Int
+  moderationLogs ProductModerationLog[]
+  cartItems      CartItem[]
+
+  seller   User @relation("SellerProducts", fields: [sellerId], references: [id], onDelete: Restrict)
+  sellerId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([sellerId])
+  @@index([isActive])
+}
+
+model ProductModerationLog {
+  id        String   @id @default(cuid())
+  productId Int
+  adminId   Int
+  action    String // APPROVED / REJECTED / RESUBMITTED
+  reason    String?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  admin   User    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model Cart {
+  id     String @id @default(cuid())
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items CartItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CartItem {
+  id        String @id @default(cuid())
+  cartId    String
+  productId Int
+  quantity  Int    @default(1)
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId]) // нельзя добавить один товар дважды
 }

@@ -12,7 +12,9 @@ const {refresh} = require("./controller/auth/refresh");
 const { loginLimiter, refreshLimiter } = require("./controller/middleweras/rateLimit");
 const {authMiddleware} = require("./controller/middleweras/AuthMiddleweras/authMiddl");
 const { listMySessions, revokeSession, revokeAllSessions } = require("./controller/auth/session");
-
+const { getCategoriesPublic } = require("./controller/public/public.categories");
+const productRoutes = require("./controller/routes/productRoutes");
+const cartRoutes = require("./controller/routes/cartRoutes");
 
 const api = express();
 
@@ -39,6 +41,11 @@ api.get("/auth/sessions", authMiddleware, listMySessions);
 api.delete("/auth/sessions/:id", authMiddleware, revokeSession);
 api.post("/auth/logoutAllSessions", authMiddleware, revokeAllSessions);
 
+api.get("/categories", getCategoriesPublic);
+
+api.use("/products", productRoutes);
+
+api.use("/cart", cartRoutes);
 
 api.set("trust proxy", 1);
 module.exports = api;
